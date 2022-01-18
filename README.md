@@ -1,2 +1,2 @@
-# Module_2
-Module 2 assignment files
+# Intro to Text and Data Mining
+LIS 4761
