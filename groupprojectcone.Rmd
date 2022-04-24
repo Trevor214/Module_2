@@ -1,0 +1,123 @@
+---
+title: "GroupProjectCone!"
+author: "Trevor Cone"
+date: "4/19/2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Group Project Analysis from Trevor C. 
+
+Which products are rated the highest and which ones are rated the lowest? 
+
+(Visualization with text analysis methods, word cloud).
+
+```{r "Step 1: Loading Libraries"}
+require(ggplot2)
+require(reshape2)
+require(wordcloud)
+require(tm)
+require(qdap)
+require(data.table)
+require(scales)
+require(tidyverse)
+require(tidytext)
+```
+## Here I cleaned the data a little more to make the helpfulness score a num to be able to use it in the context I need it to. This uses the method from week 3 taking the NAs to the mean of the rest of the values. This should allow me to filter through the a reviews helpfulness. Reviews.csv was the original data file.
+```{r, Additional Cleaning}
+reviewsdf <- read.csv("Reviews.csv")
+reviewsdf
+str(reviewsdf)
+
+colnames(reviewsdf)
+reviewhelpfulness <- reviewsdf$HelpfulnessNumerator / reviewsdf$HelpfulnessDenominator
+reviewhelpfulness
+max(reviewhelpfulness)
+
+reviewhelpfulness[is.nan(reviewhelpfulness)] <- mean(reviewhelpfulness, na.rm = TRUE)
+
+max(reviewhelpfulness)
+min(reviewhelpfulness)
+head(reviewhelpfulness)
+```
+
+
+## Read in data
+
+```{r, File Read-in}
+
+amazonfile <- fread("finefoods.csv")
+amazondf <- data.frame(amazonfile)
+str(amazondf)
+head(reviewhelpfulness)
+amazondf$review.helpfulness <- reviewhelpfulness
+
+```
+
+## Initial Look
+With this initial look we are going to look into the review scores. On a scale from 1 to 5 with 1 being the lowest and 5 being the highest these are the scores that are left by users of the product they purchased. First I want to see a simple table to get an idea of where the review scores land. using the function table we access the amazon dataframe and create a table called reviewScoretable. Printing the table we can see that the "5" score has the highest amount. So we can start to imagine what the distriburion looks like but we don't need imagination with ggplot. 
+Next I created a ggplot graph using the amazondf dataframe created above to make a bar graph to show that distribution. We can finally visualize the large number of 5s that are given. However, this data set covers a wide range of items so this distribution alone does not tell us which items are the best and worst. 
+
+```{r, Initial Look}
+reviewScoretable <- table(amazondf$review.score)
+reviewScoretable
+ggplot(amazondf, aes(x = review.score)) + geom_bar(fill = "skyblue", color = "skyblue") + labs(title = "Distribution of Review Scores", x = "Review Score", y = "Count") + theme_classic() + geom_text(aes(label = comma(..count..)), stat = "count", vjust = 1.5)
+
+```
+## First I want to look at the review helpfulness. 
+The max helpfulness score is three and the min is 0. Helpfulness was measured in a numerator and denominator form in the original set so these are percentages of how helpful a review was. From the historgram we can see anything over 1 is an outlier. We know this to be true because the calculation for review helpfulness is determined from a helpfullness numerator and denominator, making them percentages. A lot of the reviews seem to be around the .75 mark Going forward we want our reviews to be around that .75 or greater mark when analyzing for the top best and worst items in this dataset. 
+
+```{r, Review Helpfulness}
+max(amazondf$review.helpfulness)
+min(amazondf$review.helpfulness)
+ggplot(amazondf, aes(x = review.helpfulness)) + geom_histogram(color = "black", fill = "skyblue", bins = 9) + xlim(0,1) + labs(title = "Distribution of Review Helpfulness", x = "Review Helpfulness", y = "Count") + theme_classic()
+
+```
+
+##  Using the filter() function to extract the rows with the two shown conditions to make two new data frames called toprated and lowestrated. We will use these dataframes instead of the whole 500000+ data set.  
+Top reviewd items. Two conditions high review helpfulness and 5 star reviews. 
+```{r, Top Rated Data Frame}
+toprated <- filter(amazondf, review.helpfulness >= .95 & review.score == 5)
+str(toprated)
+```
+## Lowest reviewed items. Two conditions high review helpfulness and 1 star reviews. 
+```{r, Lowest Rated Data Frame}
+lowestrated <- filter(amazondf, review.helpfulness >= .95 & review.score == 1)
+str(lowestrated)
+```
+
+## text analysis
+
+```{r, Text Analysis}
+stopWords <- data.frame(word = c(stopwords("en"), "br", "also"))
+
+TopAnalysis <- toprated %>% unnest_tokens(word, review.text) %>%  anti_join(stopWords)
+freqTerms <- TopAnalysis %>% count(word) %>% arrange(desc(n))
+Top30 <- freqTerms[1:30,]
+
+LowestAnalysis <- lowestrated %>% unnest_tokens(word, review.text) %>% anti_join(stopWords)
+freqTerms1 <- LowestAnalysis %>% count(word) %>% arrange(desc(n))
+Lowest30<- freqTerms1[1:30,]
+```
+
+```{r, Visualization for the 100 Most Freq Words for Both 5 Star and 1 Star Reviews}
+#
+ggplot(Top30, aes(x = word, y = n, fill = word)) + geom_col() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Top 30 Words Used in 5 Star reviews", x = "Word", y = "Count")
+ggplot(Lowest30, aes(x = word, y = n, fill = word)) +geom_col() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Top 30 Words Used in 1 Star Reviews", x = "Word", y = "Count")
+```
+
+## Analysis and discussion
+Going back to the original question of what is the best and worst reviewed product however, going through analysis for this section of the project there can never be a best item or worst item. This data set is a vast number of amazon reviews with 568500 observations and 9 variables. The variables I was interested the most were Score, review helpfulness and review text. First I wanted to see the distribution of review scores. In the first graph I created a histogram to show the count for each score. As we can see there are a vast amount of 5 star reviews with a count of 363000. Next I looked at review helpfulness. In the original data set it was given in two variables review helpfulness numerator and denominator. We combined these so it shows the ratio for review helpfulness. With all ratios it translates into percentages nicely so we can tell that usefulness can range from 0 to 1. There are two outliers that are above 1 but most of the review helpfulness scores fall around the .75 mark in the graph. To try and answer the initial question of what is the top and the lowest rated item I then filtered the reviews with two conditions. At least .95 review helpfulness and the score of either 5 or 1. This created two new dataframes called toprated and lowestrated. Next with these two dataframes I wanted to do some text analysis to find the most frequent words used in found in the review text sections for each dataframe. using stopwords and tokenising I found the top 30 words for each dataframe and graphed them. This is where the question changed because I found that because the dataset is so large the top30 words and the lowest 30 words almost match. The products I found in both graphs were tea, coffee, and dog. So it seems that tea, coffee, and dog food can be very decisive among amazon reviewers. Some users found a really good coffee, tea, or dog food or vice versa. 
+
+
+
+
+
+
+
+
